@@ -84,7 +84,7 @@ async def restart_passing_workflow(container_name: str,
     if not payload["workflow_run"]["name"] == workflow_name:
         return {"message": "Not the correct workflow"}, 200
     if not payload["workflow_run"]["conclusion"] == "success":
-        return {"message": "Workflow isn't passing"}, 200
+        return {"message": "Workflow still running or failed"}, 200
 
     container_from_name(container_name).restart()
     return {"message": "Container restarted"}, 200
