@@ -8,8 +8,9 @@ RUN rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 ENV WEBHOOK_SECRET='secret'
 
-RUN git clone "https://github.com/sondregronas/taafis" && \
-    pip install -r taafis/requirements.txt
+RUN pip install -U pip && pip install setuptools wheel
+RUN git clone https://github.com/sondregronas/taafis && \
+    pip install -r /taafis/requirements.txt
 
 RUN echo "git pull && pip install -r taafis/requirements.txt && python app.py" > /entrypoint.sh && chmod +x /entrypoint.sh
 
