@@ -22,6 +22,39 @@ See Github Webhook documentation for more information:
 https://docs.github.com/en/webhooks-and-events/webhooks/about-webhooks
 """
 
+responses = {
+    200: {
+        "description": "Success",
+        "content": {
+            "application/json": {
+                "example": {
+                    "message": "Container restarted"
+                }
+            }
+        }
+    },
+    400: {
+        "description": "Bad Request",
+        "content": {
+            "application/json": {
+                "example": {
+                    "detail": "Wrong workflow name!"
+                }
+            }
+        }
+    },
+    403: {
+        "description": "Forbidden",
+        "content": {
+            "application/json": {
+                "example": {
+                    "detail": "Invalid signature!"
+                }
+            }
+        }
+    }
+}
+
 
 def verify_signature(payload_body, secret_token, signature_header) -> None:
     """Verify that the payload was sent from GitHub by validating SHA256.
@@ -43,7 +76,7 @@ def container_from_name(name) -> docker.models.containers.Container:
     return [container for container in client.containers.list() if container.name == name][0]
 
 
-@app.post("/restart/{container_name}")
+@app.post("/restart/{container_name}", responses=responses)
 async def restart_container(container_name: str,
                             request: Request,
                             x_hub_signature_256: Annotated[str, Header()] = None):
@@ -53,15 +86,14 @@ async def restart_container(container_name: str,
     return {"message": "Container restarted"}
 
 
-@app.post("/restart-passing-workflow/{container_name}/{workflow_name}")
+@app.post("/restart-passing-workflow/{container_name}/{workflow_name}", responses=responses)
 async def restart_passing_workflow(container_name: str,
                                    workflow_name: str,
                                    request: Request,
                                    x_hub_signature_256: Annotated[str, Header()] = None):
-    """Restart a container by name only if a specific workflow is passing."""
+    """Restart a container by name if a specific workflow is passing."""
     body = await request.body()
     verify_signature(body, GITHUB_SECRET, x_hub_signature_256)
-
     payload = json.loads(body)
 
     if 'workflow_run' not in payload:
