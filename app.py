@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import os
+from functools import wraps
 from typing import Annotated
 
 import docker
@@ -19,7 +20,22 @@ NOTE: Only restarting containers via POST is implemented here.
 """
 
 
-def verify_signature(payload_body, secret_token, signature_header):
+class InvalidSignatureException(BaseException):
+    pass
+
+
+def handle_invalid_signature_exception(func) -> callable:
+    @wraps(func)
+    async def wrapper(*args, **kwargs) -> callable:
+        try:
+            return await func(*args, **kwargs)
+        except InvalidSignatureException as e:
+            return {"message": e}, 400
+
+    return wrapper
+
+
+def verify_signature(payload_body, secret_token, signature_header) -> None:
     """Verify that the payload was sent from GitHub by validating SHA256.
 
     Args:
@@ -28,29 +44,45 @@ def verify_signature(payload_body, secret_token, signature_header):
         signature_header: header received from GitHub (x-hub-signature-256)
     """
     if not signature_header:
-        raise ValueError("x-hub-signature-256 header is missing!")
+        raise InvalidSignatureException("x-hub-signature-256 header is missing!")
     hash_object = hmac.new(secret_token.encode('utf-8'), msg=payload_body, digestmod=hashlib.sha256)
     expected_signature = "sha256=" + hash_object.hexdigest()
     if not hmac.compare_digest(expected_signature, signature_header):
-        raise ValueError("Request signatures didn't match!")
+        raise InvalidSignatureException("Request signatures didn't match!")
+
+
+def container_from_name(name) -> docker.models.containers.Container:
+    return [container for container in client.containers.list() if container.name == name][0]
 
 
 @app.post("/restart/{container_name}")
+@handle_invalid_signature_exception
 async def restart_container(container_name: str,
                             request: Request,
                             x_hub_signature_256: Annotated[str, Header()] = None):
-    if x_hub_signature_256 is None:
-        return {"message": "Missing signature"}
+    """Restart a container by name."""
+    verify_signature(await request.body(), GITHUB_SECRET, x_hub_signature_256)
+    container_from_name(container_name).restart()
+    return {"message": "Container restarted"}, 200
 
-    try:
-        verify_signature(await request.body(), GITHUB_SECRET, x_hub_signature_256)
-    except ValueError as e:
-        return {"message": e}
 
-    target = [container for container in client.containers.list() if container.name == container_name][0]
-    target.restart()
-    print(f"Container {container_name} restarted")
-    return {"message": "Container restarted"}
+@app.post("/restart-passing-workflow/{container_name}/{workflow_name}")
+@handle_invalid_signature_exception
+async def restart_passing_workflow(container_name: str,
+                                   workflow_name: str,
+                                   request: Request,
+                                   x_hub_signature_256: Annotated[str, Header()] = None):
+    """Restart a container by name if the request is from a passing workflow."""
+    body = await request.body()
+    verify_signature(body, GITHUB_SECRET, x_hub_signature_256)
+
+    if not body["workflow_run"]["name"] == workflow_name:
+        return {"message": "Not the right workflow"}, 200
+    if not body["workflow_run"]["conclusion"] == "success":
+        return {"message": "Workflow isn't passing"}, 200
+
+    container_from_name(container_name).restart()
+    return {"message": "Container restarted"}, 200
 
 
 if __name__ == "__main__":
