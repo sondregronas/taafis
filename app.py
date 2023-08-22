@@ -2,13 +2,12 @@ import hashlib
 import hmac
 import json
 import os
-from functools import wraps
 from typing import Annotated
 
 import docker
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, Header
+from fastapi import FastAPI, Request, Header, HTTPException
 
 load_dotenv()
 GITHUB_SECRET = os.environ.get("WEBHOOK_SECRET")
@@ -18,22 +17,10 @@ client = docker.from_env()
 
 """
 NOTE: Only restarting containers via POST is implemented here.
+
+See Github Webhook documentation for more information:
+https://docs.github.com/en/webhooks-and-events/webhooks/about-webhooks
 """
-
-
-class InvalidSignatureException(BaseException):
-    pass
-
-
-def handle_invalid_signature_exception(func) -> callable:
-    @wraps(func)
-    async def wrapper(*args, **kwargs) -> callable:
-        try:
-            return await func(*args, **kwargs)
-        except InvalidSignatureException as e:
-            return {"message": e}, 400
-
-    return wrapper
 
 
 def verify_signature(payload_body, secret_token, signature_header) -> None:
@@ -45,11 +32,11 @@ def verify_signature(payload_body, secret_token, signature_header) -> None:
         signature_header: header received from GitHub (x-hub-signature-256)
     """
     if not signature_header:
-        raise InvalidSignatureException("x-hub-signature-256 header is missing!")
+        raise HTTPException(status_code=403, detail="No signature header received!")
     hash_object = hmac.new(secret_token.encode('utf-8'), msg=payload_body, digestmod=hashlib.sha256)
     expected_signature = "sha256=" + hash_object.hexdigest()
     if not hmac.compare_digest(expected_signature, signature_header):
-        raise InvalidSignatureException("Request signatures didn't match!")
+        raise HTTPException(status_code=403, detail="Invalid signature!")
 
 
 def container_from_name(name) -> docker.models.containers.Container:
@@ -57,18 +44,16 @@ def container_from_name(name) -> docker.models.containers.Container:
 
 
 @app.post("/restart/{container_name}")
-@handle_invalid_signature_exception
 async def restart_container(container_name: str,
                             request: Request,
                             x_hub_signature_256: Annotated[str, Header()] = None):
     """Restart a container by name."""
     verify_signature(await request.body(), GITHUB_SECRET, x_hub_signature_256)
     container_from_name(container_name).restart()
-    return {"message": "Container restarted"}, 200
+    return {"message": "Container restarted"}
 
 
 @app.post("/restart-passing-workflow/{container_name}/{workflow_name}")
-@handle_invalid_signature_exception
 async def restart_passing_workflow(container_name: str,
                                    workflow_name: str,
                                    request: Request,
@@ -80,14 +65,14 @@ async def restart_passing_workflow(container_name: str,
     payload = json.loads(body)
 
     if 'workflow_run' not in payload:
-        return {"message": "Not a workflow run"}, 200
+        raise HTTPException(status_code=403, detail="No workflow_run in payload!")
     if not payload["workflow_run"]["name"] == workflow_name:
-        return {"message": "Not the correct workflow"}, 200
+        raise HTTPException(status_code=400, detail="Wrong workflow name!")
     if not payload["workflow_run"]["conclusion"] == "success":
-        return {"message": "Workflow still running or failed"}, 200
+        raise HTTPException(status_code=400, detail="Workflow still running or failed!")
 
     container_from_name(container_name).restart()
-    return {"message": "Container restarted"}, 200
+    return {"message": "Container restarted"}
 
 
 if __name__ == "__main__":
