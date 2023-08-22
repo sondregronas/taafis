@@ -12,8 +12,8 @@ RUN pip install -U pip && pip install setuptools wheel
 RUN git clone https://github.com/sondregronas/taafis && \
     pip install -r /taafis/requirements.txt
 
-RUN echo "git pull && pip install -r taafis/requirements.txt && python app.py" > /entrypoint.sh && chmod +x /entrypoint.sh
+RUN echo "git pull && pip install -r taafis/requirements.txt && python app.py" > /entrypoint.sh
 
 WORKDIR /taafis
 EXPOSE 8000
-CMD ["/entrypoint.sh"]
+CMD ["sh", "/entrypoint.sh"]

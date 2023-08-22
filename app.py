@@ -12,7 +12,7 @@ client = docker.from_env()
 
 
 """
-NOTE: Only restarting containers via POST is implemented here. (+ GET for a list of containers)
+NOTE: Only restarting containers via POST is implemented here.
 """
 
 
@@ -24,12 +24,6 @@ async def restart_container(container_name: str):
         container.restart()
         return {"message": "Container restarted"}
     return {"message": "Nope"}
-
-
-@app.get("/containers")
-async def get_containers():
-    containers = client.containers.list()
-    return {"containers": [container.name for container in containers]}
 
 
 if __name__ == "__main__":
