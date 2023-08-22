@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import json
 import os
 from functools import wraps
 from typing import Annotated
@@ -72,13 +73,17 @@ async def restart_passing_workflow(container_name: str,
                                    workflow_name: str,
                                    request: Request,
                                    x_hub_signature_256: Annotated[str, Header()] = None):
-    """Restart a container by name if the request is from a passing workflow."""
+    """Restart a container by name only if a specific workflow is passing."""
     body = await request.body()
     verify_signature(body, GITHUB_SECRET, x_hub_signature_256)
 
-    if not body["workflow_run"]["name"] == workflow_name:
-        return {"message": "Not the right workflow"}, 200
-    if not body["workflow_run"]["conclusion"] == "success":
+    payload = json.loads(body)
+
+    if 'workflow_run' not in payload:
+        return {"message": "Not a workflow run"}, 200
+    if not payload["workflow_run"]["name"] == workflow_name:
+        return {"message": "Not the correct workflow"}, 200
+    if not payload["workflow_run"]["conclusion"] == "success":
         return {"message": "Workflow isn't passing"}, 200
 
     container_from_name(container_name).restart()
