@@ -22,8 +22,8 @@ See Github Webhook documentation for more information:
 https://docs.github.com/en/webhooks-and-events/webhooks/about-webhooks
 """
 
-responses = {
-    200: {
+r = {
+    "200": {
         "description": "Success",
         "content": {
             "application/json": {
@@ -33,7 +33,7 @@ responses = {
             }
         }
     },
-    400: {
+    "400": {
         "description": "Bad Request",
         "content": {
             "application/json": {
@@ -43,7 +43,7 @@ responses = {
             }
         }
     },
-    403: {
+    "403": {
         "description": "Forbidden",
         "content": {
             "application/json": {
@@ -76,7 +76,8 @@ def container_from_name(name) -> docker.models.containers.Container:
     return [container for container in client.containers.list() if container.name == name][0]
 
 
-@app.post("/restart/{container_name}", responses=responses)
+@app.post("/restart/{container_name}",
+          responses={200: r["200"], 403: r["403"]})
 async def restart_container(container_name: str,
                             request: Request,
                             x_hub_signature_256: Annotated[str, Header()] = None):
@@ -86,7 +87,8 @@ async def restart_container(container_name: str,
     return {"message": "Container restarted"}
 
 
-@app.post("/restart-passing-workflow/{container_name}/{workflow_name}", responses=responses)
+@app.post("/restart-passing-workflow/{container_name}/{workflow_name}",
+          responses={200: r["200"], 400: r["400"], 403: r["403"]})
 async def restart_passing_workflow(container_name: str,
                                    workflow_name: str,
                                    request: Request,
