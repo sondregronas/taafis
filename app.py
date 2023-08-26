@@ -78,7 +78,7 @@ def container_from_name(name) -> docker.models.containers.Container:
 
 async def graceful_restart(container: docker.models.containers.Container) -> None:
     """Gracefully restart a container."""
-    container.restart(timeout=60)
+    container.restart(signal="SIGINT", timeout=30)
 
 
 @app.post("/restart/{container_name}",
