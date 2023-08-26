@@ -76,14 +76,9 @@ def container_from_name(name) -> docker.models.containers.Container:
     return [container for container in client.containers.list() if container.name == name][0]
 
 
-async def restart(container) -> None:
-    """Restart a container."""
-    if container.status == "running":
-        container.stop()
-        container.wait()
-        container.start()
-    else:
-        raise HTTPException(status_code=400, detail="Container not running!")
+async def graceful_restart(container: docker.models.containers.Container) -> None:
+    """Gracefully restart a container."""
+    container.restart(timeout=60)
 
 
 @app.post("/restart/{container_name}",
@@ -93,7 +88,7 @@ async def restart_container(container_name: str,
                             x_hub_signature_256: Annotated[str, Header()] = None):
     """Restart a container by name."""
     verify_signature(await request.body(), GITHUB_SECRET, x_hub_signature_256)
-    await restart(container_from_name(container_name))
+    await graceful_restart(container_from_name(container_name))
     return {"message": "Container restarted"}
 
 
@@ -115,7 +110,7 @@ async def restart_passing_workflow(container_name: str,
     if not payload["workflow_run"]["conclusion"] == "success":
         raise HTTPException(status_code=400, detail="Workflow still running or failed!")
 
-    await restart(container_from_name(container_name))
+    await graceful_restart(container_from_name(container_name))
     return {"message": "Container restarted"}
 
 
