@@ -79,9 +79,9 @@ def container_from_name(name) -> docker.models.containers.Container:
 async def restart(container) -> None:
     """Restart a container."""
     if container.status == "running":
-        client.stop(container)
-        client.wait(container)
-        client.start(container)
+        container.stop()
+        container.wait()
+        container.start()
     else:
         raise HTTPException(status_code=400, detail="Container not running!")
 
