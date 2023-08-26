@@ -13,7 +13,7 @@ load_dotenv()
 GITHUB_SECRET = os.environ.get("WEBHOOK_SECRET")
 
 app = FastAPI()
-client = 'docker.from_env()'
+client = docker.from_env()
 
 """
 NOTE: Only restarting containers via POST is implemented here.
