@@ -76,19 +76,26 @@ def container_from_name(name) -> docker.models.containers.Container:
     return [container for container in client.containers.list() if container.name == name][0]
 
 
-async def graceful_restart(container: docker.models.containers.Container) -> None:
+async def graceful_restart(container: docker.models.containers.Container, signal: str = None) -> None:
     """Gracefully restart a container."""
-    container.restart(timeout=30)
+    if not signal:
+        container.restart(timeout=30)
+        return
+    container.kill(signal=signal)
+    if signal != 'SIGHUP':
+        container.wait()
+    container.start()
 
 
 @app.post("/restart/{container_name}",
           responses={200: r["200"], 403: r["403"]})
 async def restart_container(container_name: str,
                             request: Request,
-                            x_hub_signature_256: Annotated[str, Header()] = None):
+                            x_hub_signature_256: Annotated[str, Header()] = None,
+                            signal: str = None):
     """Restart a container by name."""
     verify_signature(await request.body(), GITHUB_SECRET, x_hub_signature_256)
-    await graceful_restart(container_from_name(container_name))
+    await graceful_restart(container_from_name(container_name), signal=signal)
     return {"message": "Container restarted"}
 
 
@@ -97,7 +104,8 @@ async def restart_container(container_name: str,
 async def restart_passing_workflow(container_name: str,
                                    workflow_name: str,
                                    request: Request,
-                                   x_hub_signature_256: Annotated[str, Header()] = None):
+                                   x_hub_signature_256: Annotated[str, Header()] = None,
+                                   signal: str = None):
     """Restart a container by name if a specific workflow is passing."""
     body = await request.body()
     verify_signature(body, GITHUB_SECRET, x_hub_signature_256)
@@ -110,7 +118,7 @@ async def restart_passing_workflow(container_name: str,
     if not payload["workflow_run"]["conclusion"] == "success":
         raise HTTPException(status_code=400, detail="Workflow still running or failed!")
 
-    await graceful_restart(container_from_name(container_name))
+    await graceful_restart(container_from_name(container_name), signal=signal)
     return {"message": "Container restarted"}
 
 
