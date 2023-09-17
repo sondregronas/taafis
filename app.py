@@ -105,7 +105,8 @@ async def restart_passing_workflow(container_name: str,
                                    workflow_name: str,
                                    request: Request,
                                    x_hub_signature_256: Annotated[str, Header()] = None,
-                                   signal: str = None):
+                                   signal: str = None,
+                                   branch: str = 'main'):
     """Restart a container by name if a specific workflow is passing."""
     body = await request.body()
     verify_signature(body, GITHUB_SECRET, x_hub_signature_256)
@@ -113,6 +114,8 @@ async def restart_passing_workflow(container_name: str,
 
     if 'workflow_run' not in payload:
         raise HTTPException(status_code=403, detail="No workflow_run in payload!")
+    if not payload["workflow_run"]["head_branch"] == branch:
+        raise HTTPException(status_code=400, detail="Wrong branch!")
     if not payload["workflow_run"]["name"] == workflow_name:
         raise HTTPException(status_code=400, detail="Wrong workflow name!")
     if not payload["workflow_run"]["conclusion"] == "success":
