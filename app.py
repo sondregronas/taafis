@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import os
+import threading
 from typing import Annotated
 
 import docker
@@ -61,11 +62,14 @@ def verify_signature(payload_body, secret_token, signature_header) -> None:
 
 
 def container_from_name(name) -> docker.models.containers.Container:
-    return [
-        container
-        for container in client.containers.list(all=True)
-        if container.name == name
-    ][0]
+    try:
+        return [
+            container
+            for container in client.containers.list(all=True)
+            if container.name == name
+        ][0]
+    except IndexError:
+        raise HTTPException(status_code=400, detail="Container not found!")
 
 
 async def graceful_restart(
@@ -96,8 +100,10 @@ async def restart_container(
 
     if not payload["ref"] == f"refs/heads/{branch}":
         raise HTTPException(status_code=400, detail="Wrong branch!")
-
-    await graceful_restart(container_from_name(container_name), signal=signal)
+    t = threading.Thread(
+        target=graceful_restart, args=(container_from_name(container_name), signal)
+    )
+    t.start()
     return {"message": "Container restarted"}
 
 
@@ -127,7 +133,10 @@ async def restart_passing_workflow(
     if not payload["workflow_run"]["conclusion"] == "success":
         raise HTTPException(status_code=400, detail="Workflow still running or failed!")
 
-    await graceful_restart(container_from_name(container_name), signal=signal)
+    t = threading.Thread(
+        target=graceful_restart, args=(container_from_name(container_name), signal)
+    )
+    t.start()
     return {"message": "Container restarted"}
 
 
