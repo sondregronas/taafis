@@ -26,33 +26,19 @@ r = {
     "200": {
         "description": "Success",
         "content": {
-            "application/json": {
-                "example": {
-                    "message": "Container restarted"
-                }
-            }
-        }
+            "application/json": {"example": {"message": "Container restarted"}}
+        },
     },
     "400": {
         "description": "Bad Request",
         "content": {
-            "application/json": {
-                "example": {
-                    "detail": "Wrong workflow name!"
-                }
-            }
-        }
+            "application/json": {"example": {"detail": "Wrong workflow name!"}}
+        },
     },
     "403": {
         "description": "Forbidden",
-        "content": {
-            "application/json": {
-                "example": {
-                    "detail": "Invalid signature!"
-                }
-            }
-        }
-    }
+        "content": {"application/json": {"example": {"detail": "Invalid signature!"}}},
+    },
 }
 
 
@@ -66,53 +52,64 @@ def verify_signature(payload_body, secret_token, signature_header) -> None:
     """
     if not signature_header:
         raise HTTPException(status_code=403, detail="No signature header received!")
-    hash_object = hmac.new(secret_token.encode('utf-8'), msg=payload_body, digestmod=hashlib.sha256)
+    hash_object = hmac.new(
+        secret_token.encode("utf-8"), msg=payload_body, digestmod=hashlib.sha256
+    )
     expected_signature = "sha256=" + hash_object.hexdigest()
     if not hmac.compare_digest(expected_signature, signature_header):
         raise HTTPException(status_code=403, detail="Invalid signature!")
 
 
 def container_from_name(name) -> docker.models.containers.Container:
-    return [container for container in client.containers.list() if container.name == name][0]
+    return [
+        container for container in client.containers.list() if container.name == name
+    ][0]
 
 
-async def graceful_restart(container: docker.models.containers.Container, signal: str = None) -> None:
+async def graceful_restart(
+    container: docker.models.containers.Container, signal: str = None
+) -> None:
     """Gracefully restart a container."""
     if not signal:
         container.restart(timeout=30)
         return
     container.kill(signal=signal)
-    if signal != 'SIGHUP':
+    if signal != "SIGHUP":
         container.wait()
     container.start()
 
 
-@app.post("/restart/{container_name}",
-          responses={200: r["200"], 403: r["403"]})
-async def restart_container(container_name: str,
-                            request: Request,
-                            x_hub_signature_256: Annotated[str, Header()] = None,
-                            signal: str = None):
+@app.post("/restart/{container_name}", responses={200: r["200"], 403: r["403"]})
+async def restart_container(
+    container_name: str,
+    request: Request,
+    x_hub_signature_256: Annotated[str, Header()] = None,
+    signal: str = None,
+):
     """Restart a container by name."""
     verify_signature(await request.body(), GITHUB_SECRET, x_hub_signature_256)
     await graceful_restart(container_from_name(container_name), signal=signal)
     return {"message": "Container restarted"}
 
 
-@app.post("/restart-passing-workflow/{container_name}/{workflow_name}",
-          responses={200: r["200"], 400: r["400"], 403: r["403"]})
-async def restart_passing_workflow(container_name: str,
-                                   workflow_name: str,
-                                   request: Request,
-                                   x_hub_signature_256: Annotated[str, Header()] = None,
-                                   signal: str = None,
-                                   branch: str = 'main'):
+@app.post(
+    "/restart-passing-workflow/{container_name}/{workflow_name}",
+    responses={200: r["200"], 400: r["400"], 403: r["403"]},
+)
+async def restart_passing_workflow(
+    container_name: str,
+    workflow_name: str,
+    request: Request,
+    x_hub_signature_256: Annotated[str, Header()] = None,
+    signal: str = None,
+    branch: str = "main",
+):
     """Restart a container by name if a specific workflow is passing."""
     body = await request.body()
     verify_signature(body, GITHUB_SECRET, x_hub_signature_256)
     payload = json.loads(body)
 
-    if 'workflow_run' not in payload:
+    if "workflow_run" not in payload:
         raise HTTPException(status_code=403, detail="No workflow_run in payload!")
     if not payload["workflow_run"]["head_branch"] == branch:
         raise HTTPException(status_code=400, detail="Wrong branch!")
