@@ -72,7 +72,7 @@ def container_from_name(name) -> docker.models.containers.Container:
         raise HTTPException(status_code=400, detail="Container not found!")
 
 
-async def graceful_restart(
+def graceful_restart(
     container: docker.models.containers.Container, signal: str = None
 ) -> None:
     """Gracefully restart a container."""
