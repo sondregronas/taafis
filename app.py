@@ -62,7 +62,9 @@ def verify_signature(payload_body, secret_token, signature_header) -> None:
 
 def container_from_name(name) -> docker.models.containers.Container:
     return [
-        container for container in client.containers.list() if container.name == name
+        container
+        for container in client.containers.list(all=True)
+        if container.name == name
     ][0]
 
 
