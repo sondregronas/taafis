@@ -87,9 +87,16 @@ async def restart_container(
     request: Request,
     x_hub_signature_256: Annotated[str, Header()] = None,
     signal: str = None,
+    branch: str = "main",
 ):
     """Restart a container by name."""
+    body = await request.body()
     verify_signature(await request.body(), GITHUB_SECRET, x_hub_signature_256)
+    payload = json.loads(body)
+
+    if not payload["ref"] == f"refs/heads/{branch}":
+        raise HTTPException(status_code=400, detail="Wrong branch!")
+
     await graceful_restart(container_from_name(container_name), signal=signal)
     return {"message": "Container restarted"}
 
