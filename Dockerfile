@@ -7,7 +7,7 @@ ENV TZ='Europe/Oslo'
 RUN apt-get update && apt-get install -y \
         tzdata \
         build-essential \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN pip install --upgrade pip setuptools wheel
 
