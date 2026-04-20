@@ -1,4 +1,4 @@
-fastapi==0.135.3
+fastapi==0.136.0
 docker==7.1.0
 python-dotenv==1.2.2
 uvicorn==0.44.0
